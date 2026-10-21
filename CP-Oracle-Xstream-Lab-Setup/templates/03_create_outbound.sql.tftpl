@@ -1,0 +1,63 @@
+-- Rendered by Terraform. Runs as the XStream admin user in CDB$ROOT.
+-- CREATE_OUTBOUND creates the capture process, the queue and the outbound
+-- server in one call. The connector attaches to the outbound server.
+WHENEVER SQLERROR EXIT SQL.SQLCODE
+SET SERVEROUTPUT ON FEEDBACK OFF VERIFY OFF
+
+DECLARE
+  tables  DBMS_UTILITY.UNCL_ARRAY;
+  schemas DBMS_UTILITY.UNCL_ARRAY;
+  n       NUMBER;
+BEGIN
+  SELECT COUNT(*) INTO n FROM dba_xstream_outbound WHERE server_name = '${outbound_server}';
+
+  IF n > 0 THEN
+    DBMS_OUTPUT.PUT_LINE('Outbound server ${outbound_server} already exists - skipping creation');
+  ELSE
+%{ for i, t in tables ~}
+    tables(${i + 1}) := '${schema}.${t}';
+%{ endfor ~}
+    tables(${length(tables) + 1}) := NULL;
+    schemas(1) := '${schema}';
+
+    DBMS_XSTREAM_ADM.CREATE_OUTBOUND(
+      server_name           => '${outbound_server}',
+      capture_name          => '${capture_name}',
+      source_container_name => '${pdb}',
+      table_names           => tables,
+      schema_names          => schemas,
+      comment               => 'Confluent XStream CDC Connector');
+    DBMS_OUTPUT.PUT_LINE('Outbound server ${outbound_server} created');
+  END IF;
+
+  -- How long capture checkpoints (and therefore required archive logs) are kept
+  DBMS_CAPTURE_ADM.ALTER_CAPTURE(
+    capture_name              => '${capture_name}',
+    checkpoint_retention_time => ${retention_days});
+
+  -- XE has a small SGA: cap capture and outbound at 256 MB of streams pool each
+  DBMS_XSTREAM_ADM.SET_PARAMETER(
+    streams_type => 'capture',
+    streams_name => '${capture_name}',
+    parameter    => 'max_sga_size',
+    value        => '256');
+  DBMS_XSTREAM_ADM.SET_PARAMETER(
+    streams_type => 'apply',
+    streams_name => '${outbound_server}',
+    parameter    => 'max_sga_size',
+    value        => '256');
+
+  -- The connector logs in as the least-privileged connect user, not the admin
+  DBMS_XSTREAM_ADM.ALTER_OUTBOUND(
+    server_name  => '${outbound_server}',
+    connect_user => '${cdc_user}');
+END;
+/
+
+COLUMN server_name  FORMAT A12
+COLUMN capture_name FORMAT A20
+COLUMN connect_user FORMAT A16
+COLUMN status       FORMAT A10
+SELECT o.server_name, o.capture_name, o.connect_user, c.status
+  FROM dba_xstream_outbound o JOIN dba_capture c ON c.capture_name = o.capture_name;
+EXIT

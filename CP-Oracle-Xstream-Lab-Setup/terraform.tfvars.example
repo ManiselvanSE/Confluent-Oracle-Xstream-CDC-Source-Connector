@@ -1,0 +1,31 @@
+# Copy to terraform.tfvars (git-ignored) and adjust.
+
+# --- Target host ---
+host                 = "13.233.21.126"
+ssh_user             = "ec2-user"
+ssh_private_key_path = "/Users/maniselvan/Mani/mani_in.pem"
+
+# --- Passwords (8-30 chars; letters, digits, _ # !) ---
+oracle_sys_password      = "Confluent123"
+xstream_admin_password   = "Confluent12!"
+xstream_connect_password = "Confluent12!"
+sink_schema_password     = "Confluent12!"   # ORDERMGMT_SINK (JDBC sink target)
+
+# --- Optional overrides (defaults shown) ---
+# cp_version                = "8.3.2"
+# xstream_connector_version = "1.6.0"
+# bind_address              = "127.0.0.1"   # "0.0.0.0" to expose ports (then restrict the security group!)
+# swap_size_gb              = 4
+# redo_log_size_mb          = 512
+# recovery_area_size_gb     = 20
+# capture_schema            = "ORDERMGMT"
+# capture_tables            = ["ORDERS", "ORDER_ITEMS", "CUSTOMERS"]
+# topic_prefix              = "XEPDB1"
+# connector_name            = "XSTREAMCDC0"
+# enable_control_center     = true          # Control Center + Prometheus + Alertmanager on :9021 (~2 GB RAM)
+# control_center_version    = "2.5.0"
+# enable_jdbc_sink          = true          # CDC topics -> Oracle ORDERMGMT_SINK via JDBC sink
+# jdbc_connector_version    = "10.9.9"
+# sink_schema               = "ORDERMGMT_SINK"
+# run_validation            = true
+# destroy_purges_data       = false
