@@ -84,7 +84,14 @@ insert/delete through the whole pipeline. If everything passes, the lab is ready
 
 ## Part 2: Explore the lab (step by step)
 
-Unless stated otherwise, run commands **on the EC2 host** from the lab directory:
+There are two directories. Don't mix them up:
+
+| Directory | What it is | Run here |
+|-----------|-----------|----------|
+| `CP-Oracle-Xstream-Lab-Setup` (where you cloned the repo) | Terraform code | `terraform ...` |
+| `~/cdc-xstream` on the EC2 host | The running lab (created by Terraform) | `bin/demo.sh`, `docker compose` |
+
+Unless stated otherwise, run commands **on the EC2 host** in the lab directory:
 
 ```bash
 cd ~/cdc-xstream
@@ -101,18 +108,24 @@ terraform output              # every output
 terraform output kafka_topics # the CDC topics
 ```
 
-Log in and open the tunnel (keep the tunnel running in a separate terminal):
+`terraform output ssh` and `terraform output ssh_tunnel` print the commands to log in and to open
+the tunnel.
+
+**SSH tunnel (needed for Control Center).** The lab ports listen on `127.0.0.1` on the host only.
+To open Control Center in your browser, run the tunnel **on your laptop**, even if Terraform ran on
+the EC2 host. Keep it running in its own terminal:
 
 ```bash
-$(terraform output -raw ssh)           # SSH into the host
-$(terraform output -raw ssh_tunnel)    # forwards 1521, 9092, 8081, 8083, 9021 to your laptop
+ssh -i <path-to-key.pem> -N -L 9021:localhost:9021 -L 8081:localhost:8081 -L 8083:localhost:8083 ec2-user@<host>
 ```
+
+It prints nothing while it runs. Then open http://localhost:9021 on your laptop.
 
 ### Step 4: See what was created on the host
 
 ```bash
 ls -la ~/cdc-xstream                          # .env, docker-compose.yml, bin/, oracle/, connect/, connector/
-sudo docker compose ps                        # all containers and their state
+sudo docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'   # all containers and their state
 sudo docker images | grep -E 'cdc-xstream|confluentinc|oracle'
 sudo docker volume ls | grep cdc-xstream      # persistent Oracle and Kafka data
 bin/demo.sh status                            # containers + connector states in one view
@@ -169,7 +182,7 @@ you'll find the topics and their messages, under **Connect** both connectors, an
 curl -s localhost:8083/connectors/XSTREAMCDC0/status | jq   # connector + task RUNNING
 bin/demo.sh config XSTREAMCDC0                              # config, passwords masked
 curl -s localhost:8083/connectors/XSTREAMCDC0/topics | jq   # topics it writes to
-sudo docker compose logs --tail 50 connect                  # worker log
+sudo docker logs --tail 50 connect                          # worker log
 ```
 
 ### Step 8: Kafka topics
@@ -309,7 +322,7 @@ Connect outage, schema evolution).
 | Re-run all checks | laptop: `terraform output -raw validate \| sh` |
 | Change settings / tables / versions | edit `terraform.tfvars` → `terraform apply` |
 | Turn Control Center or the JDBC sink on/off | `enable_control_center` / `enable_jdbc_sink` → `terraform apply` |
-| Restart everything | host: `sudo docker compose restart` (data is on volumes) |
+| Restart everything | host: `cd ~/cdc-xstream && sudo docker compose restart` (data is on volumes) |
 | Free archive-log space | host: `sudo bash bin/purge_archivelogs.sh 1` |
 | Host IP changed after stop/start | update `host` in `terraform.tfvars` |
 
@@ -328,7 +341,7 @@ This removes the containers and keeps the Oracle and Kafka volumes. Set
 |---------|-----|
 | `PREFLIGHT FAILED: not enough disk` | enlarge the root EBS volume to 100 GB and re-apply (the filesystem grows automatically) |
 | Oracle stage takes long | first DB creation takes 10–25 min. Watch `sudo docker logs -f oracle21c` |
-| Connector `FAILED` | `curl -s localhost:8083/connectors/XSTREAMCDC0/status \| jq -r '.tasks[0].trace'` and `sudo docker compose logs connect` |
+| Connector `FAILED` | `curl -s localhost:8083/connectors/XSTREAMCDC0/status \| jq -r '.tasks[0].trace'` and `sudo docker logs connect` |
 | Connector RUNNING but no new events | as SYSDBA: `SELECT state FROM v$xstream_capture;` (capture may be waiting for redo) |
 | Sink counts show `DIFF` | check lag (Step 10). It drains within seconds unless the sink task failed |
 | `ORA-00257` (archiver stuck) | `sudo bash bin/purge_archivelogs.sh 1` |
