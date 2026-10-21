@@ -172,9 +172,29 @@ bin/demo.sh plugins                                         # installed plugins 
 curl -s "localhost:8083/connectors?expand=status" | jq      # both connectors with status
 ```
 
-**Control Center:** with the tunnel open, browse to **http://localhost:9021**. Under **Topics**
-you'll find the topics and their messages, under **Connect** both connectors, and under
-**Schema Registry** the subjects. Broker charts fill in after a couple of minutes.
+#### Open Control Center (SSH tunnel)
+
+Control Center listens on `127.0.0.1:9021` on the EC2 host only, so reach it through an SSH tunnel.
+
+1. **On the EC2 host**, check that it is up (`200` = OK):
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' localhost:9021
+   ```
+2. **On your laptop**, open a new terminal and start the tunnel. Leave it running; it prints nothing:
+   ```bash
+   ssh -i <path-to-key.pem> -N -L 9021:localhost:9021 ec2-user@<ec2-public-ip>
+   # example:
+   ssh -i ~/Mani/mani_in.pem -N -L 9021:localhost:9021 ec2-user@3.108.191.243
+   ```
+3. **On your laptop**, open **http://localhost:9021** in a browser.
+4. When you're done, press `Ctrl-C` in the tunnel terminal.
+
+In Control Center, **Topics** shows the CDC topics and their messages, **Connect** shows
+`XSTREAMCDC0` and `JDBCSINK0`, and **Schema Registry** shows the subjects. Broker charts fill in
+after 2–3 minutes.
+
+If port 9021 is already in use on your laptop, use `-L 19021:localhost:9021` and open
+http://localhost:19021.
 
 ### Step 7: Source connector `XSTREAMCDC0`
 
