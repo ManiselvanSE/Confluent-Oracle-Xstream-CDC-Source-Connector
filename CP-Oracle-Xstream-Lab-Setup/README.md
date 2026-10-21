@@ -28,24 +28,54 @@ For a customer-facing walkthrough with talk track, see [DEMO.md](DEMO.md).
 
 ### Prerequisites
 
-- Terraform ≥ 1.5 on your laptop
 - An **x86_64 Amazon Linux 2023** EC2 host, **≥ 16 GB RAM** (`t3.xlarge`), **100 GB root volume**
-- Security group: TCP 22 from your IP. The host needs outbound HTTPS.
-
-### Step 1: Configure
+- Security group: TCP 22 from the machine running Terraform. The host needs outbound HTTPS.
+- Git and Terraform ≥ 1.5 on the machine that runs Terraform (your laptop or the EC2 host itself).
+  On Amazon Linux 2023:
 
 ```bash
-cd CP-Oracle-Xstream-Lab-Setup
+sudo dnf install -y git dnf-plugins-core
+sudo dnf config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
+sudo dnf install -y terraform
+```
+
+### Step 1: Get the code and configure
+
+```bash
+git clone https://github.com/ManiselvanSE/Confluent-Oracle-Xstream-CDC-Source-Connector.git
+cd Confluent-Oracle-Xstream-CDC-Source-Connector/CP-Oracle-Xstream-Lab-Setup
 cp terraform.tfvars.example terraform.tfvars
 vi terraform.tfvars      # set host, ssh_private_key_path and the four passwords
 ```
 
-### Step 2: Apply
+> Terraform connects to `host` over SSH, even when it runs on the EC2 host itself.
+> `ssh_private_key_path` must point to the `.pem` key **on the machine running Terraform**
+> (for example `/home/ec2-user/mani_in.pem` with `chmod 400`), and the security group must allow
+> port 22 from that machine.
+
+### Step 2: Plan and apply
 
 ```bash
 terraform init
+terraform plan
 terraform apply          # ~30–45 min on the first run
 ```
+
+`terraform plan` shows **7 resources to add**. These are `terraform_data` stages: each one runs
+scripts on the host over SSH. No AWS resources are created.
+
+| # | Resource | What it does on the host |
+|---|----------|--------------------------|
+| 1 | `terraform_data.teardown` | Nothing on create. On `terraform destroy` it runs `docker compose down` |
+| 2 | `terraform_data.bootstrap` | Uploads the files to `~/cdc-xstream`, checks disk/RAM/OS, installs Docker |
+| 3 | `terraform_data.oracle` | Starts Oracle XE 21c, enables XStream, loads `ORDERMGMT`, creates the outbound server `XOUT` |
+| 4 | `terraform_data.confluent` | Builds the Connect image and starts the broker, Schema Registry, Connect and Control Center |
+| 5 | `terraform_data.connector` | Creates the XStream CDC source connector `XSTREAMCDC0` |
+| 6 | `terraform_data.jdbc_sink` | Creates schema `ORDERMGMT_SINK` and the JDBC sink connector `JDBCSINK0` |
+| 7 | `terraform_data.validation[0]` | Runs `validate.sh`: all checks + an end-to-end test |
+
+The plan also lists the **outputs** you'll use later: `ssh`, `ssh_tunnel`, `validate`,
+`connector_status`, `kafka_topics`, `oracle_connections`, `control_center_url` and `jdbc_sink`.
 
 The run ends with `validate.sh` printing PASS/FAIL for every check, including an end-to-end
 insert/delete through the whole pipeline. If everything passes, the lab is ready.
@@ -63,7 +93,7 @@ cd ~/cdc-xstream
 > `bin/demo.sh` is a helper that wraps the longer commands. Each section shows the helper
 > and the plain command it runs.
 
-### Step 3: See the Terraform resources and outputs (laptop)
+### Step 3: See the Terraform resources and outputs (in the Terraform directory)
 
 ```bash
 terraform state list          # the terraform_data stages that were applied
