@@ -20,8 +20,6 @@ Terraform turns **one existing EC2 host** into a complete change-data-capture la
 | `connect` | Kafka Connect with the XStream CDC and JDBC connectors | 8083 |
 | `control-center`, `prometheus`, `alertmanager` | Control Center UI | 9021 |
 
-For a customer-facing walkthrough with talk track, see [DEMO.md](DEMO.md).
-
 ---
 
 ## Part 1: Deploy
@@ -193,6 +191,8 @@ In Control Center, **Topics** shows the CDC topics and their messages, **Connect
 `XSTREAMCDC0` and `JDBCSINK0`, and **Schema Registry** shows the subjects. Broker charts fill in
 after 2–3 minutes.
 
+![Control Center cluster overview](images/c3-cluster-overview.png)
+
 If port 9021 is already in use on your laptop, use `-L 19021:localhost:9021` and open
 http://localhost:19021.
 
@@ -204,6 +204,10 @@ bin/demo.sh config XSTREAMCDC0                              # config, passwords 
 curl -s localhost:8083/connectors/XSTREAMCDC0/topics | jq   # topics it writes to
 sudo docker logs --tail 50 connect                          # worker log
 ```
+
+In Control Center: **Connect → connect-default**. Both connectors should show **Running** with 1 task.
+
+![Control Center connectors](images/c3-connectors.png)
 
 ### Step 8: Kafka topics
 
@@ -230,6 +234,10 @@ bin/demo.sh event ORDERS
 Each event has `op` (`r` = snapshot, `c` = insert, `u` = update, `d` = delete), `before`,
 `after` and `source` (SCN, table, transaction). The message key is the table's primary key.
 
+In Control Center: **Topics** lists the 13 `XEPDB1.ORDERMGMT.*` CDC topics.
+
+![Control Center topics](images/c3-topics.png)
+
 ### Step 9: Schema Registry subjects
 
 Each topic has a `-key` and a `-value` subject.
@@ -242,6 +250,10 @@ curl -s localhost:8081/subjects/XEPDB1.ORDERMGMT.ORDERS-key/versions/latest   | 
 
 bin/demo.sh schema ORDERS     # summary: versions, key fields, value columns
 ```
+
+In Control Center: **Topics → XEPDB1.ORDERMGMT.ORDERS → Schema** (switch between **Value** and **Key**).
+
+![Control Center topic schema](images/c3-topic-schema.png)
 
 ### Step 10: Sink connector `JDBCSINK0` and the sink tables
 
@@ -295,6 +307,12 @@ bin/demo.sh latency                 # time from Oracle COMMIT until the row is i
 Terminal 1 shows one line per event: `INSERT` with the new row, `UPDATE` with only the
 changed columns (`before -> after`), `DELETE` followed by a `TOMBSTONE` (which makes the sink
 delete the row).
+
+You can see the same events in Control Center under **Topics → XEPDB1.ORDERMGMT.ORDERS → Messages**.
+The newest are at the top: the insert (`before: null`), the update (`before` and `after`), the
+delete (`after: null`) and its tombstone (value `null`). Click the eye icon to see a full event.
+
+![Control Center topic messages](images/c3-topic-messages.png)
 
 ### The same flow by hand in SQL*Plus
 
