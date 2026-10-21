@@ -125,14 +125,6 @@ The preflight stops with a clear error if there is not enough free space.
 3. Nothing else is required. `00_preflight.sh` runs `growpart` and
    `xfs_growfs` on the host, so the filesystem grows automatically.
 
-Or with the AWS CLI:
-
-```bash
-VOL=$(aws ec2 describe-instances --region ap-south-1 \
-  --filters Name=ip-address,Values=13.233.21.126 \
-  --query 'Reservations[0].Instances[0].BlockDeviceMappings[0].Ebs.VolumeId' --output text)
-aws ec2 modify-volume --region ap-south-1 --volume-id "$VOL" --size 100
-```
 
 ### Step 2: Configure
 
